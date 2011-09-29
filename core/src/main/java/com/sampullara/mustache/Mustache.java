@@ -485,7 +485,7 @@ public class Mustache {
 
   private Map<String, Mustache> partialCache = new ConcurrentHashMap<String, Mustache>();
 
-  protected Mustache partial(String name) throws MustacheException {
+  public Mustache partial(String name) throws MustacheException {
     Mustache mustache = partialCache.get(name);
     if (mustache == null) {
       mustache = compilePartial(name);

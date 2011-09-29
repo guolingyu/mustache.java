@@ -5,26 +5,58 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sampullara.mustache.Code;
 import com.sampullara.mustache.CodeFactory;
-import com.sampullara.mustache.IdentityScope;
 import com.sampullara.mustache.Mustache;
 import com.sampullara.mustache.MustacheException;
 import com.sampullara.mustache.Scope;
 import com.sampullara.util.FutureWriter;
 
-import static com.sampullara.mustache.IdentityScope.one;
-
 /**
  * Generates Java backing code for a template
  */
 public class JavaCodeFactory implements CodeFactory {
+  public static class Call {
+    @Override
+    public String toString() {
+      return "Call{" +
+              "type='" + type + '\'' +
+              ", name='" + name + '\'' +
+              '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      Call call = (Call) o;
+
+      if (name != null ? !name.equals(call.name) : call.name != null) return false;
+      if (type != null ? !type.equals(call.type) : call.type != null) return false;
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = type != null ? type.hashCode() : 0;
+      result = 31 * result + (name != null ? name.hashCode() : 0);
+      return result;
+    }
+
+    public Call(String type, String name) {
+      this.type = type;
+      this.name = name;
+    }
+    public final String type;
+    public final String name;
+  }
+
   @Override
   public Code iterable(final Mustache m, final String variable, List<Code> codes, String file, int line) {
     return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("start iterable: " + variable);
-        execute(m, scope);
-        System.out.println("end   iterable: " + variable);
+        execute(scope, new Call("iterable", variable));
       }
     };
   }
@@ -34,9 +66,7 @@ public class JavaCodeFactory implements CodeFactory {
     return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("start function: " + variable);
-        execute(m, scope);
-        System.out.println("end   function: " + variable);
+        execute(scope, new Call("function", variable));
       }
     };
   }
@@ -46,9 +76,7 @@ public class JavaCodeFactory implements CodeFactory {
     return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("start if: " + variable);
-        execute(m, scope);
-        System.out.println("end   if: " + variable);
+        execute(scope, new Call("if", variable));
       }
     };
   }
@@ -58,9 +86,7 @@ public class JavaCodeFactory implements CodeFactory {
     return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("start not: " + variable);
-        execute(m, scope);
-        System.out.println("end   not: " + variable);
+        execute(scope, new Call("not", variable));
       }
     };
   }
@@ -70,7 +96,10 @@ public class JavaCodeFactory implements CodeFactory {
     return new MyCode() {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("partial: " + variable);
+        Scope subScope = new Scope();
+        scope.put(variable, subScope);
+        Mustache partial = m.partial(variable);
+        partial.execute(fw, scope);
       }
     };
   }
@@ -80,7 +109,7 @@ public class JavaCodeFactory implements CodeFactory {
     return new MyCode() {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
-        System.out.println("value: " + variable);
+        scope.put(new Call("value", variable), new Scope());
       }
     };
   }
@@ -107,9 +136,11 @@ public class JavaCodeFactory implements CodeFactory {
       this.codes = codes;
     }
 
-    protected void execute(Mustache m, Scope scope) throws MustacheException {
+    protected void execute(Scope scope, Call call) throws MustacheException {
+      Scope subScope = new Scope();
+      scope.put(call, subScope);
       for (Code code : codes) {
-        code.execute(new FutureWriter(), scope);
+        code.execute(new FutureWriter(), subScope);
       }
     }
 
