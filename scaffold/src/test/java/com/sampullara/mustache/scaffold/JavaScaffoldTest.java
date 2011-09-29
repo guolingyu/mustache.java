@@ -7,12 +7,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
 
-import javax.annotation.PreDestroy;
-
+import com.sampullara.mustache.IdentityScope;
 import com.sampullara.mustache.Mustache;
 import com.sampullara.mustache.MustacheBuilder;
 import com.sampullara.mustache.MustacheException;
-import com.sampullara.mustache.MustacheJava;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -20,9 +18,11 @@ public class JavaScaffoldTest {
   @Test
   public void testIt() throws IOException, MustacheException {
     MustacheBuilder mj = init();
-
+    mj.setCodeFactory(new JavaCodeFactory());
     Mustache m = mj.parse(getContents(root, "complex.html"));
-
+    StringWriter writer = new StringWriter();
+    m.execute(writer, IdentityScope.one);
+    System.out.println(writer);
   }
 
   private static File root;

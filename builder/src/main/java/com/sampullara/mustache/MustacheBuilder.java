@@ -262,4 +262,7 @@ public class MustacheBuilder implements MustacheJava {
     return new StringBuilder();
   }
 
+  public void setCodeFactory(CodeFactory cf) {
+    this.cf = cf;
+  }
 }

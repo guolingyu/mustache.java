@@ -19,11 +19,11 @@ import static com.sampullara.mustache.IdentityScope.one;
 public class JavaCodeFactory implements CodeFactory {
   @Override
   public Code iterable(final Mustache m, final String variable, List<Code> codes, String file, int line) {
-    return new MyCode() {
+    return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
         System.out.println("start iterable: " + variable);
-        m.iterable(one, variable);
+        execute(m, scope);
         System.out.println("end   iterable: " + variable);
       }
     };
@@ -31,11 +31,11 @@ public class JavaCodeFactory implements CodeFactory {
 
   @Override
   public Code function(final Mustache m, final String variable, List<Code> codes, String file, int line) {
-    return new MyCode() {
+    return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
         System.out.println("start function: " + variable);
-        m.iterable(one, variable);
+        execute(m, scope);
         System.out.println("end   function: " + variable);
       }
     };
@@ -43,11 +43,11 @@ public class JavaCodeFactory implements CodeFactory {
 
   @Override
   public Code ifIterable(final Mustache m, final String variable, List<Code> codes, String file, int line) {
-    return new MyCode() {
+    return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
         System.out.println("start if: " + variable);
-        m.iterable(one, variable);
+        execute(m, scope);
         System.out.println("end   if: " + variable);
       }
     };
@@ -55,11 +55,11 @@ public class JavaCodeFactory implements CodeFactory {
 
   @Override
   public Code notIterable(final Mustache m, final String variable, List<Code> codes, String file, int line) {
-    return new MyCode() {
+    return new MyCode(codes) {
       @Override
       public void execute(FutureWriter fw, Scope scope) throws MustacheException {
         System.out.println("start not: " + variable);
-        m.iterable(one, variable);
+        execute(m, scope);
         System.out.println("end   not: " + variable);
       }
     };
@@ -96,6 +96,23 @@ public class JavaCodeFactory implements CodeFactory {
   }
 
   private static abstract class MyCode implements Code {
+
+    private List<Code> codes;
+
+    public MyCode() {
+
+    }
+
+    public MyCode(List<Code> codes) {
+      this.codes = codes;
+    }
+
+    protected void execute(Mustache m, Scope scope) throws MustacheException {
+      for (Code code : codes) {
+        code.execute(new FutureWriter(), scope);
+      }
+    }
+
     @Override
     public int getLine() {
       return 0;
