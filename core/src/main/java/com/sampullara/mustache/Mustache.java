@@ -334,7 +334,7 @@ public class Mustache {
    * @param name
    * @return
    */
-  protected Iterable<Scope> iterable(final Scope s, final String name) {
+  public Iterable<Scope> iterable(final Scope s, final String name) {
     if (s == IdentityScope.one) {
       return Lists.newArrayList(s);
     }
