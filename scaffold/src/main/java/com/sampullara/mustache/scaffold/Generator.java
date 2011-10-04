@@ -40,7 +40,7 @@ public class Generator {
     }
 
     MustacheBuilder mb = new MustacheBuilder(templateDirectory);
-    JavaCodeFactory jcf = new JavaCodeFactory();
+    ScaffoldCodeFactory jcf = new ScaffoldCodeFactory();
     mb.setCodeFactory(jcf);
     Mustache mustache = mb.parseFile(template.getPath());
     Scope scope = new Scope();

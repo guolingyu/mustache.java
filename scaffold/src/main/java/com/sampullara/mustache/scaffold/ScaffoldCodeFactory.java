@@ -13,7 +13,7 @@ import com.sampullara.util.FutureWriter;
 /**
  * Generates Java backing code for a template
  */
-public class JavaCodeFactory implements CodeFactory {
+public class ScaffoldCodeFactory implements CodeFactory {
   public static class Call {
     @Override
     public String toString() {
