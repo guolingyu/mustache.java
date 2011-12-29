@@ -1,6 +1,11 @@
 package com.sampullara.mustache.code;
 
 import java.io.IOException;
+import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Constructor;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -14,6 +19,7 @@ import com.sampullara.mustache.MustacheTrace;
 import com.sampullara.mustache.Scope;
 import com.sampullara.util.FutureWriter;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -194,7 +200,7 @@ public abstract class WriteValueCode implements Code, Opcodes {
     ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
     MethodVisitor mv;
 
-    cw.visit(V1_6, ACC_PUBLIC + ACC_SUPER, className,
+    cw.visit(V1_7, ACC_PUBLIC + ACC_SUPER, className,
             null, "com/sampullara/mustache/code/WriteValueCode", null);
 
     cw.visitSource(className + ".java", null);
@@ -234,8 +240,7 @@ public abstract class WriteValueCode implements Code, Opcodes {
       ga.loadArg(0);
       ga.loadThis();
       ga.getField(Type.getType(className), "name", Type.getType(String.class));
-      ga.invokeVirtual(Type.getType(Mustache.class),
-              Method.getMethod("Object getValue(com.sampullara.mustache.Scope, String)"));
+      ga.invokeDynamic("getValue", "(Lcom/sampullara/mustache/Mustache;Lcom/sampullara/mustache/Scope;Ljava/lang/String;)Ljava/lang/Object;", BOOTSTRAP_METHOD);
       ga.returnValue();
       ga.endMethod();
     }
@@ -244,4 +249,13 @@ public abstract class WriteValueCode implements Code, Opcodes {
     return cw.toByteArray();
   }
 
+  public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type) throws NoSuchMethodException, IllegalAccessException {
+    MethodHandle mine = MethodHandles.lookup().findVirtual(Mustache.class, "getValue", MethodType.methodType(Object.class, Scope.class, String.class));
+    return new ConstantCallSite(mine);
+  }
+  
+  private static final Handle BOOTSTRAP_METHOD =
+          new Handle(H_INVOKESTATIC, "com/sampullara/mustache/code/WriteValueCode", "bootstrap",
+                  MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class,
+                          MethodType.class).toMethodDescriptorString());
 }
