@@ -6,6 +6,7 @@ import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.MutableCallSite;
 import java.lang.reflect.Constructor;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -250,8 +251,17 @@ public abstract class WriteValueCode implements Code, Opcodes {
   }
 
   public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type) throws NoSuchMethodException, IllegalAccessException {
-    MethodHandle mine = MethodHandles.lookup().findVirtual(Mustache.class, "getValue", MethodType.methodType(Object.class, Scope.class, String.class));
-    return new ConstantCallSite(mine);
+    MethodHandle lookupHandle = MethodHandles.lookup().findStatic(WriteValueCode.class, "lookup",
+            MethodType.methodType(Object.class, MutableCallSite.class, Mustache.class, Scope.class, String.class));
+    MutableCallSite callSite = new MutableCallSite(MethodType.methodType(Object.class, Mustache.class, Scope.class, String.class));
+    callSite.setTarget(lookupHandle.bindTo(callSite));
+    return callSite;
+  }
+
+  public static Object lookup(MutableCallSite callSite, Mustache m, Scope scope, String name) throws Throwable {
+    MethodHandle targetHandle = MethodHandles.lookup().findVirtual(Mustache.class, "getValue", MethodType.methodType(Object.class, Scope.class, String.class));
+    callSite.setTarget(targetHandle);
+    return targetHandle.invokeWithArguments(m, scope, name);
   }
   
   private static final Handle BOOTSTRAP_METHOD =
