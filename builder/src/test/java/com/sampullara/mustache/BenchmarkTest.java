@@ -41,6 +41,7 @@ public class BenchmarkTest extends TestCase {
   }
 
   public void testComplex() throws MustacheException, IOException {
+    FutureWriter.setParallel();
     System.out.println("complex.html evaluations per millisecond:");
     for (int i = 0; i < 2; i++) {
       {

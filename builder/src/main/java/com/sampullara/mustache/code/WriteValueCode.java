@@ -11,8 +11,6 @@ import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static com.sampullara.mustache.Mustache.truncate;
 
@@ -23,9 +21,9 @@ import static com.sampullara.mustache.Mustache.truncate;
  * Date: 11/27/11
  * Time: 10:40 AM
  */
-public class WriteValueCode implements Code {
-  private final Mustache m;
-  private final String name;
+public abstract class WriteValueCode implements Code {
+  protected final Mustache m;
+  protected final String name;
   private final boolean encoded;
   private final int line;
 
@@ -44,7 +42,7 @@ public class WriteValueCode implements Code {
       String traceName = parent == null ? scope.getClass().getName() : parent.getClass().getName();
       event = MustacheTrace.addEvent("get: " + name, traceName);
     }
-    Object value = m.getValue(scope, name);
+    Object value = getValue(scope);
     if (Mustache.trace) {
       event.end();
     }
@@ -82,6 +80,9 @@ public class WriteValueCode implements Code {
       }
     }
   }
+
+  // We can use this to override with code instead of calls
+  protected abstract Object getValue(Scope scope);
 
   @Override
   public int getLine() {

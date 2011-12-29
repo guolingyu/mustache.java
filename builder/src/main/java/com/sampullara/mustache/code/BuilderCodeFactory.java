@@ -42,7 +42,12 @@ public class BuilderCodeFactory implements CodeFactory {
 
   @Override
   public Code value(Mustache m, String name, boolean encode, int line) {
-    return new WriteValueCode(m, name, encode, line);
+    return new WriteValueCode(m, name, encode, line) {
+      @Override
+      protected Object getValue(Scope scope) {
+        return m.getValue(scope, name);
+      }
+    };
   }
 
   @Override

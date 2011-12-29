@@ -93,7 +93,7 @@ public class Scope extends HashMap<Object, Object> {
     }
   }
 
-  public Object get(Object o, Scope scope) {
+  private Object get(Object o, Scope scope) {
     String name = o.toString();
     Object value = null;
     Iterable<String> components = split(name);

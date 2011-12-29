@@ -49,19 +49,57 @@ public class DefaultObjectHandler implements ObjectHandler {
         throw new RuntimeException("Failed to get value from future", e);
       }
     }
-    Object value = null;
     if (parent instanceof Map) {
       return ((Map) parent).get(name);
     }
-    Class aClass = parent.getClass();
-    Map<String, AccessibleObject> members;
+    // Finds the appropriate method on the class and calls it
+    AccessibleObject member = getMember(name, parent.getClass());
+    if (member == nothing) return null;
+    return call(member, parent, scope, name);
+  }
+
+  private Object call(AccessibleObject member, Object parent, Scope scope, String name) {
+    Object value = null;
+    try {
+      if (member instanceof Field) {
+        Field field = (Field) member;
+        value = field.get(parent);
+        if (value == null) {
+          if (field.getType().isAssignableFrom(Iterable.class)) {
+            value = Scope.EMPTY;
+          } else {
+            value = Scope.NULL;
+          }
+        }
+      } else if (member instanceof Method) {
+        Method method = (Method) member;
+        if (method.getParameterTypes().length == 0) {
+          value = method.invoke(parent);
+        } else {
+          value = method.invoke(parent, scope);
+        }
+        if (value == null) {
+          if (method.getReturnType().isAssignableFrom(Iterable.class)) {
+            value = Scope.EMPTY;
+          } else {
+            value = Scope.NULL;
+          }
+        }
+      }
+    } catch (Exception e) {
+      // Might be nice for debugging but annoying in practice
+      logger.log(Level.WARNING, "Failed to get value for " + name, e);
+    }
+    return value;
+  }
+
+  private AccessibleObject getMember(String name, Class aClass) {
     // Don't overload methods in your contexts
-    members = cache.get(aClass);
+    Map<String, AccessibleObject> members = cache.get(aClass);
     AccessibleObject member;
     synchronized (members) {
       member = members.get(name);
     }
-    if (member == nothing) return null;
     if (member == null) {
       try {
         member = getField(name, aClass);
@@ -105,42 +143,12 @@ public class DefaultObjectHandler implements ObjectHandler {
         }
       }
     }
-    try {
-      if (member instanceof Field) {
-        Field field = (Field) member;
-        value = field.get(parent);
-        if (value == null) {
-          if (field.getType().isAssignableFrom(Iterable.class)) {
-            value = Scope.EMPTY;
-          } else {
-            value = Scope.NULL;
-          }
-        }
-      } else if (member instanceof Method) {
-        Method method = (Method) member;
-        if (method.getParameterTypes().length == 0) {
-          value = method.invoke(parent);
-        } else {
-          value = method.invoke(parent, scope);
-        }
-        if (value == null) {
-          if (method.getReturnType().isAssignableFrom(Iterable.class)) {
-            value = Scope.EMPTY;
-          } else {
-            value = Scope.NULL;
-          }
-        }
-      }
-    } catch (Exception e) {
-      // Might be nice for debugging but annoying in practice
-      logger.log(Level.WARNING, "Failed to get value for " + name, e);
-    }
     if (member == null) {
       synchronized (members) {
-        members.put(name, nothing);
+        members.put(name, member = nothing);
       }
     }
-    return value;
+    return member;
   }
 
   @Override

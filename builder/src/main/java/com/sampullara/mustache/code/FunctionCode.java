@@ -39,7 +39,12 @@ public class FunctionCode extends SubCode {
 
   @Override
   public Scope unexecute(Scope current, final String text, final AtomicInteger position, Code[] next) throws MustacheException {
-    String value = new WriteValueCode(m, variable, false, position.get()).unexecuteValueCode(current, text, position, next);
+    String value = new WriteValueCode(m, variable, false, position.get()) {
+      @Override
+      protected Object getValue(Scope scope) {
+        return m.getValue(scope, name);
+      }
+    }.unexecuteValueCode(current, text, position, next);
     if (value == null) return null;
     Scope function = (Scope) current.get(variable);
     if (function == null) {
