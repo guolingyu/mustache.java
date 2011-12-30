@@ -1,5 +1,6 @@
 package com.sampullara.mustache;
 
+import java.lang.reflect.AccessibleObject;
 import java.util.Iterator;
 
 /**
@@ -10,6 +11,7 @@ import java.util.Iterator;
  * Time: 2:59 PM
  */
 public interface ObjectHandler {
+  AccessibleObject getMember(String name, Class aClass);
   Object handleObject(Object parent, Scope scope, String name);
   Iterator iterate(Object object);
 }

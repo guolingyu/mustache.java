@@ -37,7 +37,7 @@ public class DefaultObjectHandler implements ObjectHandler {
   private static class Nothing extends AccessibleObject {
   }
 
-  private static Nothing nothing = new Nothing();
+  public static final Nothing NOTHING = new Nothing();
 
   @Override
   public Object handleObject(Object parent, Scope scope, String name) {
@@ -54,7 +54,7 @@ public class DefaultObjectHandler implements ObjectHandler {
     }
     // Finds the appropriate method on the class and calls it
     AccessibleObject member = getMember(name, parent.getClass());
-    if (member == nothing) return null;
+    if (member == NOTHING) return null;
     return call(member, parent, scope, name);
   }
 
@@ -93,7 +93,7 @@ public class DefaultObjectHandler implements ObjectHandler {
     return value;
   }
 
-  private AccessibleObject getMember(String name, Class aClass) {
+  public AccessibleObject getMember(String name, Class aClass) {
     // Don't overload methods in your contexts
     Map<String, AccessibleObject> members = cache.get(aClass);
     AccessibleObject member;
@@ -145,7 +145,7 @@ public class DefaultObjectHandler implements ObjectHandler {
     }
     if (member == null) {
       synchronized (members) {
-        members.put(name, member = nothing);
+        members.put(name, member = NOTHING);
       }
     }
     return member;
