@@ -46,6 +46,7 @@ import static com.sampullara.mustache.Mustache.truncate;
  */
 public abstract class WriteValueCode implements Code, Opcodes {
   private static final boolean debug = Boolean.getBoolean("mustache.indy.debug");
+  private static final boolean allowIndy = Boolean.getBoolean("mustache.indy");
   protected final Mustache m;
   protected final String name;
   private final boolean encoded;
@@ -62,14 +63,20 @@ public abstract class WriteValueCode implements Code, Opcodes {
 
   static {
     boolean methodHandlePresent = false;
-    try {
-      Class.forName("java.lang.invoke.MethodHandle");
-      // If the class is found, use ASM and indy calls
-      methodHandlePresent = true;
-      Mustache.logger.info("Using invokedynamic");
-    } catch (ClassNotFoundException e) {
-      // If the class is not found then use reflection
-      Mustache.logger.info("Using reflection");
+    if (allowIndy) {
+      try {
+        Class.forName("java.lang.invoke.MethodHandle");
+        // If the class is found, use ASM and indy calls
+        methodHandlePresent = true;
+        Mustache.logger.info("Using invokedynamic");
+      } catch (ClassNotFoundException e) {
+        // If the class is not found then use reflection
+        if (allowIndy) {
+          Mustache.logger.warning("Invokedynamic enabled but not running on compatible VM");
+        } else {
+          Mustache.logger.info("Using reflection");
+        }
+      }
     }
     indy = methodHandlePresent;
   }
@@ -332,7 +339,9 @@ public abstract class WriteValueCode implements Code, Opcodes {
     // Second pass to generate the class to access the field / method
     int line = 1;
     String pkgName = parent.getClass().getPackage().getName();
-    String className = getUUID(parent.getClass().getSimpleName() + "_" + name, pkgName);
+    String simpleName = parent.getClass().getName();
+    simpleName = simpleName.substring(simpleName.lastIndexOf(".") + 1);
+    String className = getUUID(simpleName + "$" + name, pkgName);
     ClassWriter classWriter = createBridgeClass(className);
     GeneratorAdapter ga = new GeneratorAdapter(ACC_PUBLIC + ACC_STATIC,
             Method.getMethod("Object getObject(com.sampullara.mustache.Scope)"), null, null,
@@ -405,7 +414,7 @@ public abstract class WriteValueCode implements Code, Opcodes {
     }
     Label label = new Label();
     ga.visitLabel(label);
-    ga.visitLineNumber(line++, label);
+    ga.visitLineNumber(line, label);
     ga.returnValue();
     ga.endMethod();
     classWriter.visitEnd();

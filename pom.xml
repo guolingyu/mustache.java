@@ -12,7 +12,6 @@
     <module>network</module>
     <module>jackson-support</module>
     <module>handlebar</module>
-    <module>indy</module>
   </modules>
   <packaging>pom</packaging>
 
