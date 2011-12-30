@@ -1,39 +1,24 @@
 package com.sampullara.mustache.code;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.lang.invoke.CallSite;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.invoke.MutableCallSite;
-import java.lang.reflect.AccessibleObject;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sampullara.mustache.Code;
-import com.sampullara.mustache.DefaultObjectHandler;
 import com.sampullara.mustache.Mustache;
 import com.sampullara.mustache.MustacheException;
 import com.sampullara.mustache.MustacheTrace;
-import com.sampullara.mustache.ObjectHandler;
 import com.sampullara.mustache.Scope;
+import com.sampullara.mustache.indy.IndyUtil;
 import com.sampullara.util.FutureWriter;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.GeneratorAdapter;
 import org.objectweb.asm.commons.Method;
-import org.objectweb.asm.util.TraceClassVisitor;
 
 import static com.sampullara.mustache.Mustache.truncate;
 
@@ -45,51 +30,21 @@ import static com.sampullara.mustache.Mustache.truncate;
  * Time: 10:40 AM
  */
 public abstract class WriteValueCode implements Code, Opcodes {
-  private static final boolean debug = Boolean.getBoolean("mustache.indy.debug");
-  private static final boolean allowIndy = Boolean.getBoolean("mustache.indy");
   protected final Mustache m;
   protected final String name;
   private final boolean encoded;
   private final int line;
-  private static final boolean indy;
-
-  private static class IndyClassLoader extends ClassLoader {
-    public Class<?> defineClass(final String name, final byte[] b) {
-      return defineClass(name, b, 0, b.length);
-    }
-  }
-
-  private static final IndyClassLoader indyCL = new IndyClassLoader();
-
-  static {
-    boolean methodHandlePresent = false;
-    if (allowIndy) {
-      try {
-        Class.forName("java.lang.invoke.MethodHandle");
-        // If the class is found, use ASM and indy calls
-        methodHandlePresent = true;
-        Mustache.logger.info("Using invokedynamic");
-      } catch (ClassNotFoundException e) {
-        // If the class is not found then use reflection
-        if (allowIndy) {
-          Mustache.logger.warning("Invokedynamic enabled but not running on compatible VM");
-        } else {
-          Mustache.logger.info("Using reflection");
-        }
-      }
-    }
-    indy = methodHandlePresent;
-  }
 
   public static WriteValueCode createWriteValueCode(Mustache m, String name, boolean encoded, int line) {
-    if (indy) {
+    if (Mustache.indy) {
       try {
-        String className = getUUID("WriteValueCode", "com.sampullara.mustache.code");
-        byte[] bytes = createBytes(className);
-        Class<?> indyClass = indyCL.defineClass(className, bytes);
-        Constructor<?> constructor = indyClass.getConstructor(Mustache.class,
-                String.class, Boolean.TYPE, Integer.TYPE);
-        return (WriteValueCode) constructor.newInstance(m, name, encoded, line);
+        String simpleClassName = "WriteValueCode";
+        String pkgName = "com.sampullara.mustache.code";
+        String superClassName = pkgName + "." + simpleClassName;
+        String className = IndyUtil.getUUID(pkgName, simpleClassName);
+        return (WriteValueCode) IndyUtil.defineClass(className, createClass(className, superClassName))
+                .getConstructor(Mustache.class, String.class, Boolean.TYPE, Integer.TYPE)
+                .newInstance(m, name, encoded, line);
       } catch (InstantiationException e) {
         throw new RuntimeException("Failed to instantiate instance", e);
       } catch (Exception e) {
@@ -98,16 +53,55 @@ public abstract class WriteValueCode implements Code, Opcodes {
     } else return new DefaultWriteValueCode(m, name, encoded, line);
   }
 
-  private static String getUUID(String name, String pkgName) {
-    String uuid = UUID.randomUUID().toString().replace("-", "_");
-    return pkgName + "." + name + "_" + uuid;
-  }
-
   protected WriteValueCode(Mustache m, String name, boolean encoded, int line) {
     this.m = m;
     this.name = name;
     this.encoded = encoded;
     this.line = line;
+  }
+
+  public static byte[] createClass(String className, String superClassName) throws Exception {
+    className = className.replace(".", "/");
+    superClassName = superClassName.replace(".", "/");
+
+    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+    MethodVisitor mv;
+
+    cw.visit(V1_7, ACC_PUBLIC + ACC_SUPER, className,
+            null, superClassName, null);
+
+    cw.visitSource(className + ".java", null);
+
+    {
+      mv = cw.visitMethod(ACC_PUBLIC, "<init>",
+              "(Lcom/sampullara/mustache/Mustache;Ljava/lang/String;ZI)V", null, null);
+      mv.visitCode();
+      mv.visitVarInsn(ALOAD, 0);
+      mv.visitVarInsn(ALOAD, 1);
+      mv.visitVarInsn(ALOAD, 2);
+      mv.visitVarInsn(ILOAD, 3);
+      mv.visitVarInsn(ILOAD, 4);
+      mv.visitMethodInsn(INVOKESPECIAL, superClassName, "<init>",
+              "(Lcom/sampullara/mustache/Mustache;Ljava/lang/String;ZI)V");
+      mv.visitInsn(RETURN);
+      mv.visitMaxs(5, 5);
+      mv.visitEnd();
+    }
+    {
+      GeneratorAdapter ga = new GeneratorAdapter(ACC_PROTECTED,
+              Method.getMethod("Object getValue(com.sampullara.mustache.Scope)"), null, null, cw);
+      ga.loadThis();
+      ga.getField(Type.getType(className), "name", Type.getType(String.class));
+      ga.loadArg(0);
+      ga.invokeDynamic("getValue",
+              "(Ljava/lang/String;Lcom/sampullara/mustache/Scope;)Ljava/lang/Object;",
+              IndyUtil.BOOTSTRAP_METHOD);
+      ga.returnValue();
+      ga.endMethod();
+    }
+    cw.visitEnd();
+
+    return cw.toByteArray();
   }
 
   @Override
@@ -215,228 +209,4 @@ public abstract class WriteValueCode implements Code, Opcodes {
     return value.replaceAll("&quot;", "\"").replaceAll("&lt;", "<").replaceAll("&gt;", ">")
             .replaceAll("&#10;", "\n").replaceAll("\\\\", "\\").replaceAll("&amp;", "&");
   }
-
-  public static byte[] createBytes(String className) throws Exception {
-    className = className.replace(".", "/");
-
-    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
-    MethodVisitor mv;
-
-    cw.visit(V1_7, ACC_PUBLIC + ACC_SUPER, className,
-            null, "com/sampullara/mustache/code/WriteValueCode", null);
-
-    cw.visitSource(className + ".java", null);
-
-    {
-      mv = cw.visitMethod(ACC_PUBLIC, "<init>",
-              "(Lcom/sampullara/mustache/Mustache;Ljava/lang/String;ZI)V", null, null);
-      mv.visitCode();
-      Label l0 = new Label();
-      mv.visitLabel(l0);
-      mv.visitLineNumber(8, l0);
-      mv.visitVarInsn(ALOAD, 0);
-      mv.visitVarInsn(ALOAD, 1);
-      mv.visitVarInsn(ALOAD, 2);
-      mv.visitVarInsn(ILOAD, 3);
-      mv.visitVarInsn(ILOAD, 4);
-      mv.visitMethodInsn(INVOKESPECIAL, "com/sampullara/mustache/code/WriteValueCode", "<init>",
-              "(Lcom/sampullara/mustache/Mustache;Ljava/lang/String;ZI)V");
-      Label l1 = new Label();
-      mv.visitLabel(l1);
-      mv.visitLineNumber(9, l1);
-      mv.visitInsn(RETURN);
-      Label l2 = new Label();
-      mv.visitLabel(l2);
-      mv.visitLocalVariable("this", "L" + className + ";", null, l0, l2, 0);
-      mv.visitLocalVariable("m", "Lcom/sampullara/mustache/Mustache;", null, l0, l2, 1);
-      mv.visitLocalVariable("name", "Ljava/lang/String;", null, l0, l2, 2);
-      mv.visitLocalVariable("encoded", "Z", null, l0, l2, 3);
-      mv.visitLocalVariable("line", "I", null, l0, l2, 4);
-      mv.visitMaxs(5, 5);
-      mv.visitEnd();
-    }
-    {
-      GeneratorAdapter ga = new GeneratorAdapter(ACC_PROTECTED,
-              Method.getMethod("Object getValue(com.sampullara.mustache.Scope)"), null, null, cw);
-      ga.loadThis();
-      ga.getField(Type.getType(className), "name", Type.getType(String.class));
-      ga.loadArg(0);
-      ga.invokeDynamic("getValue",
-              "(Ljava/lang/String;Lcom/sampullara/mustache/Scope;)Ljava/lang/Object;",
-              BOOTSTRAP_METHOD);
-      ga.returnValue();
-      ga.endMethod();
-    }
-    cw.visitEnd();
-
-    return cw.toByteArray();
-  }
-
-  public static ClassWriter createBridgeClass(String className) throws Exception {
-    className = className.replace(".", "/");
-
-    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
-    MethodVisitor mv;
-
-    cw.visit(V1_7, ACC_PUBLIC + ACC_SUPER, className, null, "java/lang/Object", null);
-
-    cw.visitSource(className + ".java", null);
-
-    {
-      mv = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
-      mv.visitCode();
-      mv.visitVarInsn(ALOAD, 0);
-      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V");
-      mv.visitInsn(RETURN);
-      mv.visitMaxs(2, 2);
-      mv.visitEnd();
-    }
-
-    return cw;
-  }
-
-  public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type) throws NoSuchMethodException, IllegalAccessException {
-    MethodHandle lookupHandle = MethodHandles.lookup().findStatic(WriteValueCode.class, "lookup",
-            MethodType.methodType(Object.class, MutableCallSite.class, String.class, Scope.class));
-    MutableCallSite callSite = new MutableCallSite(
-            MethodType.methodType(Object.class, String.class, Scope.class));
-    callSite.setTarget(lookupHandle.bindTo(callSite));
-    return callSite;
-  }
-
-  public static Object returnNull() {
-    return null;
-  }
-
-  public static Object lookup(MutableCallSite callSite, String name, Scope scope) throws Throwable {
-    // Here we do the lookup all the way down to the method
-    // and generate code to find the the object at runtime in the scope
-    Scope originalScope = scope;
-
-    // Find the target field or method
-    AccessibleObject ao = null;
-    Object parent = originalScope.getParent();
-    if (parent != null) {
-      ObjectHandler objectHandler = scope.getObjectHandler();
-      ao = objectHandler.getMember(name, name.getClass());
-    }
-    if (ao == null) {
-      while (ao == null && (scope = scope.getParentScope()) != null) {
-        parent = scope.getParent();
-        if (parent != null) {
-          ObjectHandler objectHandler = scope.getObjectHandler();
-          ao = objectHandler.getMember(name, parent.getClass());
-        }
-      }
-    }
-    if (ao == null || ao == DefaultObjectHandler.NOTHING) {
-      MethodHandle returnNull = MethodHandles.constant(Object.class, null);
-      MethodHandle newTarget = MethodHandles.dropArguments(returnNull, 0, String.class, Scope.class);
-      callSite.setTarget(newTarget);
-      return null;
-    }
-
-    // Second pass to generate the class to access the field / method
-    int line = 1;
-    String pkgName = parent.getClass().getPackage().getName();
-    String simpleName = parent.getClass().getName();
-    simpleName = simpleName.substring(simpleName.lastIndexOf(".") + 1);
-    String className = getUUID(simpleName + "$" + name, pkgName);
-    ClassWriter classWriter = createBridgeClass(className);
-    GeneratorAdapter ga = new GeneratorAdapter(ACC_PUBLIC + ACC_STATIC,
-            Method.getMethod("Object getObject(com.sampullara.mustache.Scope)"), null, null,
-            classWriter);
-    ao = null;
-    scope = originalScope;
-    parent = scope.getParent();
-    if (parent != null) {
-      ObjectHandler objectHandler = scope.getObjectHandler();
-      ao = objectHandler.getMember(name, name.getClass());
-    }
-    if (ao == null) {
-      ga.loadArg(0);
-      while (ao == null && (scope = scope.getParentScope()) != null) {
-        parent = scope.getParent();
-        if (parent != null) {
-          ObjectHandler objectHandler = scope.getObjectHandler();
-          ao = objectHandler.getMember(name, parent.getClass());
-          if (ao != null) {
-            Label label = new Label();
-            ga.visitLabel(label);
-            ga.visitLineNumber(line++, label);
-            ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("com.sampullara.mustache.Scope getParentScope()"));
-            Label label2 = new Label();
-            ga.visitLabel(label2);
-            ga.visitLineNumber(line++, label2);
-            ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("Object getParent()"));
-          }
-        } else {
-          Label label = new Label();
-          ga.visitLabel(label);
-          ga.visitLineNumber(line++, label);
-          ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("com.sampullara.mustache.Scope getParentScope()"));
-        }
-      }
-    } else {
-      ga.loadArg(0);
-      Label label = new Label();
-      ga.visitLabel(label);
-      ga.visitLineNumber(line++, label);
-      ga.invokeVirtual(Type.getType(Object.class), Method.getMethod("Object getParent()"));
-    }
-    if (ao == null) {
-      throw new AssertionError();
-    }
-
-    // We have the object on the stack, now we need to call the method or field
-    Type parentType = Type.getType(parent.getClass());
-    ga.checkCast(parentType);
-    if (ao instanceof Field) {
-      Label label = new Label();
-      ga.visitLabel(label);
-      ga.visitLineNumber(line++, label);
-      Field field = (Field) ao;
-      ga.getField(parentType, field.getName(), Type.getType(((Field) ao).getType()));
-    } else {
-      java.lang.reflect.Method method = (java.lang.reflect.Method) ao;
-      if (method.getParameterTypes().length == 0) {
-        Label label = new Label();
-        ga.visitLabel(label);
-        ga.visitLineNumber(line++, label);
-        ga.invokeVirtual(parentType, Method.getMethod(method));
-      } else {
-        ga.loadArg(0);
-        Label label = new Label();
-        ga.visitLabel(label);
-        ga.visitLineNumber(line++, label);
-        ga.invokeVirtual(parentType, Method.getMethod(method));
-      }
-    }
-    Label label = new Label();
-    ga.visitLabel(label);
-    ga.visitLineNumber(line, label);
-    ga.returnValue();
-    ga.endMethod();
-    classWriter.visitEnd();
-    byte[] b = classWriter.toByteArray();
-    if (debug) {
-      PrintWriter printWriter = new PrintWriter(System.out, true);
-      ClassVisitor cv = new TraceClassVisitor(printWriter);
-      new ClassReader(b).accept(cv, 0);
-      printWriter.flush();
-    }
-    Class<?> bridgeClass = indyCL.defineClass(className, b);
-
-    MethodHandle targetMethod = MethodHandles.lookup().findStatic(bridgeClass,
-            "getObject", MethodType.methodType(Object.class, Scope.class));
-    Object o = targetMethod.invokeWithArguments(originalScope);
-    targetMethod = MethodHandles.dropArguments(targetMethod, 0, String.class);
-    callSite.setTarget(targetMethod);
-    return o;
-  }
-
-  private static final Handle BOOTSTRAP_METHOD =
-          new Handle(H_INVOKESTATIC, "com/sampullara/mustache/code/WriteValueCode", "bootstrap",
-                  MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class,
-                          MethodType.class).toMethodDescriptorString());
 }

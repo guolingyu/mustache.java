@@ -67,6 +67,25 @@ public class Mustache {
   // The template text
   protected StringBuilder sb = new StringBuilder();
 
+  // Invokedynamic suppport
+  public static final boolean allowIndy = Boolean.getBoolean("mustache.indy");
+  public static final boolean indy;
+  static {
+    boolean methodHandlePresent = false;
+    if (allowIndy) {
+      try {
+        Class.forName("java.lang.invoke.MethodHandle");
+        // If the class is found, use ASM and indy calls
+        methodHandlePresent = true;
+        logger.info("Using invokedynamic for method and field calls if accessible");
+      } catch (ClassNotFoundException e) {
+        // If the class is not found then use reflection
+        Mustache.logger.warning("Invokedynamic enabled but not running on compatible VM");
+      }
+    }
+    indy = methodHandlePresent;
+  }
+
   /**
    * Given text that was created by or that matches the shape of a mustache
    * template, return the scope that can be used to recreate the text.
