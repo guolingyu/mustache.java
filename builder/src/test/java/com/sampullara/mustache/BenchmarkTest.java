@@ -171,7 +171,7 @@ public class BenchmarkTest extends TestCase {
     return sw;
   }
 
-  private static class ComplexObject {
+  public static class ComplexObject {
     String header = "Colors";
     List<Color> item = Arrays.asList(
             new Color("red", true, "#Red"),
@@ -191,15 +191,15 @@ public class BenchmarkTest extends TestCase {
       return ((List) s.get("item")).size() == 0;
     }
 
-    private static class Color {
+    public static class Color {
       Color(String name, boolean current, String url) {
         this.name = name;
         this.current = current;
         this.url = url;
       }
-      String name;
-      boolean current;
-      String url;
+      public String name;
+      public boolean current;
+      public String url;
     }
   }
 }

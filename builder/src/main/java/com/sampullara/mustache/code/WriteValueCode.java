@@ -45,6 +45,7 @@ import static com.sampullara.mustache.Mustache.truncate;
  * Time: 10:40 AM
  */
 public abstract class WriteValueCode implements Code, Opcodes {
+  private static final boolean debug = Boolean.getBoolean("mustache.indy.debug");
   protected final Mustache m;
   protected final String name;
   private final boolean encoded;
@@ -76,7 +77,7 @@ public abstract class WriteValueCode implements Code, Opcodes {
   public static WriteValueCode createWriteValueCode(Mustache m, String name, boolean encoded, int line) {
     if (indy) {
       try {
-        String className = getUUID("com.sampullara.mustache.code");
+        String className = getUUID("WriteValueCode", "com.sampullara.mustache.code");
         byte[] bytes = createBytes(className);
         Class<?> indyClass = indyCL.defineClass(className, bytes);
         Constructor<?> constructor = indyClass.getConstructor(Mustache.class,
@@ -90,9 +91,9 @@ public abstract class WriteValueCode implements Code, Opcodes {
     } else return new DefaultWriteValueCode(m, name, encoded, line);
   }
 
-  private static String getUUID(String pkgName) {
+  private static String getUUID(String name, String pkgName) {
     String uuid = UUID.randomUUID().toString().replace("-", "_");
-    return pkgName + ".WriteValueClass_" + uuid;
+    return pkgName + "." + name + "_" + uuid;
   }
 
   protected WriteValueCode(Mustache m, String name, boolean encoded, int line) {
@@ -329,8 +330,9 @@ public abstract class WriteValueCode implements Code, Opcodes {
     }
 
     // Second pass to generate the class to access the field / method
+    int line = 1;
     String pkgName = parent.getClass().getPackage().getName();
-    String className = getUUID(pkgName);
+    String className = getUUID(parent.getClass().getSimpleName() + "_" + name, pkgName);
     ClassWriter classWriter = createBridgeClass(className);
     GeneratorAdapter ga = new GeneratorAdapter(ACC_PUBLIC + ACC_STATIC,
             Method.getMethod("Object getObject(com.sampullara.mustache.Scope)"), null, null,
@@ -350,14 +352,27 @@ public abstract class WriteValueCode implements Code, Opcodes {
           ObjectHandler objectHandler = scope.getObjectHandler();
           ao = objectHandler.getMember(name, parent.getClass());
           if (ao != null) {
+            Label label = new Label();
+            ga.visitLabel(label);
+            ga.visitLineNumber(line++, label);
+            ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("com.sampullara.mustache.Scope getParentScope()"));
+            Label label2 = new Label();
+            ga.visitLabel(label2);
+            ga.visitLineNumber(line++, label2);
             ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("Object getParent()"));
           }
         } else {
-          ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("Scope getParentScope()"));
+          Label label = new Label();
+          ga.visitLabel(label);
+          ga.visitLineNumber(line++, label);
+          ga.invokeVirtual(Type.getType(Scope.class), Method.getMethod("com.sampullara.mustache.Scope getParentScope()"));
         }
       }
     } else {
       ga.loadArg(0);
+      Label label = new Label();
+      ga.visitLabel(label);
+      ga.visitLineNumber(line++, label);
       ga.invokeVirtual(Type.getType(Object.class), Method.getMethod("Object getParent()"));
     }
     if (ao == null) {
@@ -368,25 +383,39 @@ public abstract class WriteValueCode implements Code, Opcodes {
     Type parentType = Type.getType(parent.getClass());
     ga.checkCast(parentType);
     if (ao instanceof Field) {
+      Label label = new Label();
+      ga.visitLabel(label);
+      ga.visitLineNumber(line++, label);
       Field field = (Field) ao;
       ga.getField(parentType, field.getName(), Type.getType(((Field) ao).getType()));
     } else {
       java.lang.reflect.Method method = (java.lang.reflect.Method) ao;
       if (method.getParameterTypes().length == 0) {
+        Label label = new Label();
+        ga.visitLabel(label);
+        ga.visitLineNumber(line++, label);
         ga.invokeVirtual(parentType, Method.getMethod(method));
       } else {
         ga.loadArg(0);
+        Label label = new Label();
+        ga.visitLabel(label);
+        ga.visitLineNumber(line++, label);
         ga.invokeVirtual(parentType, Method.getMethod(method));
       }
     }
+    Label label = new Label();
+    ga.visitLabel(label);
+    ga.visitLineNumber(line++, label);
     ga.returnValue();
     ga.endMethod();
     classWriter.visitEnd();
     byte[] b = classWriter.toByteArray();
-    PrintWriter printWriter = new PrintWriter(System.out, true);
-    ClassVisitor cv = new TraceClassVisitor(printWriter);
-    new ClassReader(b).accept(cv, 0);
-    printWriter.flush();
+    if (debug) {
+      PrintWriter printWriter = new PrintWriter(System.out, true);
+      ClassVisitor cv = new TraceClassVisitor(printWriter);
+      new ClassReader(b).accept(cv, 0);
+      printWriter.flush();
+    }
     Class<?> bridgeClass = indyCL.defineClass(className, b);
 
     MethodHandle targetMethod = MethodHandles.lookup().findStatic(bridgeClass,
